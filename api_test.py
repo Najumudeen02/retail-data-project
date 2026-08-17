@@ -7,7 +7,6 @@ url = "https://jsonplaceholder.typicode.com/posts"
 all_posts =[]
 page = 1
 
-#day 5 - Added function to call the api multiple times
 def fetch_posts(page, limit):
     param = {
          "_page": page,
