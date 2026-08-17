@@ -1,31 +1,62 @@
 import requests
 
+
 url = "https://jsonplaceholder.typicode.com/posts"
+#url = "https://this-domain-does-not-exist-12345.com"
 
 all_posts =[]
 page = 1
 
+def fetch_posts(page, limit):
+    param = {
+         "_page": page,
+         "_limit": limit
+             }
+    try:
+        response = requests.get(url,params=param)
+        if response.status_code == 200:
+            return response.json()
+        else: 
+            print("Status Code:", response.status_code())
+            return all_posts
+
+    except Exception as conn_error:
+        print("Connection went wrong", conn_error)
+        return all_posts
+
 
 try:
     while True:
-        
-        param = {
-             "_page": page,
-            "_limit": 10
-                }
-        page += 1
-        response = requests.get(url,params=param)
-        #print("Page:", param["_page"])
+        #Day 5 code with function logic
+        data = fetch_posts(page,10)
 
-        data = response.json()
         if not data:
             break
-        
+
+        all_posts.extend(data)
+
+        page += 1
+
+    print("Total posts:", len(all_posts))
+    if all_posts:
+        print("First post ID:", all_posts[0]["id"])
+        print("Last post ID:", all_posts[-1]["id"])
+    else:
+        print("No posts were retrieved.")
+    
+
+
+        #response = requests.get(url,params=param)
+        #print("Page:", param["_page"])
+        #data = response.json()
+
+     
+
         # print("Number of records:",len(data))
         # print("First post ID:",data[0]['id'])
         # print("Last post ID:",data[-1]['id'])
         
-        all_posts.extend(data)
+
 
     # if response.status_code == 200:
     #   data = response.json()
@@ -37,15 +68,16 @@ try:
     #   print("Request failed.")
     #   print("Status Code",response.status_code)
     
-    print("Total posts:", len(all_posts))
-    print("First post ID:", all_posts[0]["id"])
-    print("Last post ID:", all_posts[-1]["id"])
+
    
 
 except Exception as e:
     print("Something went wrong", e)
 
 
+# print(len(data))
+# print(data[0]["id"])
+# print(data[-1]["id"])
 # # user_counts = {}
 # # count=0
 # # for post in data:
