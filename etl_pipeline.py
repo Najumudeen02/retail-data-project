@@ -1,6 +1,10 @@
 import requests
 import sqlite3
 import logging
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
 
 #Day 10 - Logger information
 # logging.basicConfig(
@@ -11,11 +15,18 @@ import logging
 
 # logger = logging.getLogger(__name__)
 
+API_URL = os.getenv("API_URL")
+DATABASE_PATH = os.getenv("DATABASE_PATH")
+API_TIMEOUT = int(os.getenv("API_TIMEOUT", "10"))
+MAX_RETRIES = int(os.getenv("MAX_RETRIES", "3"))
+LOG_FILE = "etl_pipeline.log"
+
+
 #Day 10 - logger in file and terminal
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
-file_handler = logging.FileHandler("etl_pipeline.log")
+file_handler = logging.FileHandler(LOG_FILE)
 file_handler.setLevel(logging.INFO)
 
 stream_handler = logging.StreamHandler()
@@ -31,14 +42,14 @@ stream_handler.setFormatter(formatter)
 logger.addHandler(file_handler)
 logger.addHandler(stream_handler)
 
-url = "https://jsonplaceholder.typicode.com/posts"
+
 #url = "https://this-domain-does-not-exist-123456.com/posts"
 
 ### Day 9 with etl piplene and functions
 def extract_posts():
 
     try:
-        response = requests.get(url)
+        response = requests.get(API_URL)
         if response.status_code == 200:
             logger.info("Request is success")
             return response.json()
@@ -69,7 +80,7 @@ def load_posts(clean_posts):
     skipped =0
     processed = 0
 
-    connection = sqlite3.connect("retail_data.db")
+    connection = sqlite3.connect(DATABASE_PATH)
     cursor = connection.cursor()
     
     try:

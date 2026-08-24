@@ -1,2 +1,3 @@
 etl_pipeline.log
 retail_data.db
+*.env
