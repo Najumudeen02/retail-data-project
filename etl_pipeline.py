@@ -1,6 +1,7 @@
 import requests
 import sqlite3
 import logging
+import datetime
 from dotenv import load_dotenv
 import os
 
@@ -73,6 +74,28 @@ def transform_posts(posts):
         clean_posts.append(clean_post)
     return clean_posts
 
+def get_last_successful_run():
+
+    conn = sqlite3.connect(DATABASE_PATH)
+
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT last_successful_run
+        FROM pipeline_metadata
+        WHERE pipeline_name = ?
+    """, ("posts_pipeline",))
+
+    result = cursor.fetchone()
+
+    conn.close()
+
+    if result:
+        return result[0]
+
+    return None
+
+
 def load_posts(clean_posts):
 
     inserted = 0
@@ -82,15 +105,27 @@ def load_posts(clean_posts):
 
     connection = sqlite3.connect(DATABASE_PATH)
     cursor = connection.cursor()
-    
+
     try:
         cursor.execute(""" CREATE TABLE IF NOT EXISTS posts(
         user_id INTEGER,
         post_id INTEGER PRIMARY KEY,
         title TEXT)
         """)
-  
+
         logger.info("Posts table is ready")
+
+        cursor.execute("""CREATE TABLE IF NOT EXISTS pipeline_metadata (
+                pipeline_name TEXT PRIMARY KEY,
+                last_successful_run TEXT
+                )""")
+        logger.info("Pipeline meta table is ready")
+
+        last_run = get_last_successful_run()
+        if last_run is None:
+            logger.info("First pipeline run detected")
+        else:
+            logger.info("Incremental pipeline run. Last successful run: %s", last_run)
 
         for post in clean_posts:
 
@@ -134,12 +169,34 @@ def load_posts(clean_posts):
 
         cursor.execute("SELECT COUNT(*) FROM posts")
         logger.info("Rows in database: %s", cursor.fetchone()[0])  
-        
-        connection.close()
+
+        return True
 
     except sqlite3.Error:
         connection.rollback()
         logger.exception("DB records not updated due to upsert failure")
+        return False
+
+    finally:
+        connection.close()
+
+def update_last_successful_run():
+    run_time = datetime.datetime.now().isoformat()
+    conne = sqlite3.connect(DATABASE_PATH)
+    
+    cursor = conne.cursor()
+    
+    cursor.execute("""
+        INSERT INTO pipeline_metadata (pipeline_name,last_successful_run)
+        VALUES (?, ?)
+        ON CONFLICT(pipeline_name)
+        DO UPDATE SET last_successful_run = excluded.last_successful_run
+        """, ("posts_pipeline",run_time))
+    
+    conne.commit()
+    
+    conne.close()
+    
 
 def validate_posts(posts,clean_posts):
 
@@ -189,6 +246,9 @@ if posts is None:
 else:
     clean_posts = transform_posts(posts)
     if validate_posts(posts,clean_posts):
-        load_posts(clean_posts)
+        success = load_posts(clean_posts)
+        if success:
+            update_last_successful_run()
     else:
         logger.error("Validation failed. Load stopped.")
+    
