@@ -96,14 +96,37 @@ def get_last_successful_run():
     return None
 
 
-def load_posts(clean_posts):
+def initialize_pipeline_metadata():
+
+    connection = sqlite3.connect(DATABASE_PATH)
+    cursor = connection.cursor()
+
+    try:
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS pipeline_metadata (
+                pipeline_name TEXT PRIMARY KEY,
+                last_successful_run TEXT
+            )
+        """)
+
+        connection.commit()
+        logger.info("Pipeline metadata table is ready")
+
+    except sqlite3.Error:
+        connection.rollback()
+        logger.exception("Failed to initialize pipeline metadata table")
+        raise
+
+    finally:
+        connection.close()
+
+def load_posts(clean_posts,connection):
 
     inserted = 0
     updated = 0
     skipped =0
     processed = 0
 
-    connection = sqlite3.connect(DATABASE_PATH)
     cursor = connection.cursor()
 
     try:
@@ -114,18 +137,6 @@ def load_posts(clean_posts):
         """)
 
         logger.info("Posts table is ready")
-
-        cursor.execute("""CREATE TABLE IF NOT EXISTS pipeline_metadata (
-                pipeline_name TEXT PRIMARY KEY,
-                last_successful_run TEXT
-                )""")
-        logger.info("Pipeline meta table is ready")
-
-        last_run = get_last_successful_run()
-        if last_run is None:
-            logger.info("First pipeline run detected")
-        else:
-            logger.info("Incremental pipeline run. Last successful run: %s", last_run)
 
         for post in clean_posts:
 
@@ -165,38 +176,34 @@ def load_posts(clean_posts):
         logger.info("Updated records: %s", updated)
         logger.info("Skipped records: %s", skipped)
 
-        connection.commit()
-
         cursor.execute("SELECT COUNT(*) FROM posts")
         logger.info("Rows in database: %s", cursor.fetchone()[0])  
 
         return True
 
     except sqlite3.Error:
-        connection.rollback()
         logger.exception("DB records not updated due to upsert failure")
-        return False
+        raise
 
-    finally:
-        connection.close()
+def update_last_successful_run(connection):
 
-def update_last_successful_run():
     run_time = datetime.datetime.now().isoformat()
-    conne = sqlite3.connect(DATABASE_PATH)
+    cursor = connection .cursor()
     
-    cursor = conne.cursor()
+    try:
+        cursor.execute("""
+            INSERT INTO pipeline_metadata (pipeline_name,last_successful_run)
+            VALUES (?, ?)
+            ON CONFLICT(pipeline_name)
+            DO UPDATE SET last_successful_run = excluded.last_successful_run
+            """, ("posts_pipeline",run_time))
     
-    cursor.execute("""
-        INSERT INTO pipeline_metadata (pipeline_name,last_successful_run)
-        VALUES (?, ?)
-        ON CONFLICT(pipeline_name)
-        DO UPDATE SET last_successful_run = excluded.last_successful_run
-        """, ("posts_pipeline",run_time))
-    
-    conne.commit()
-    
-    conne.close()
-    
+        logger.info("Pipeline watermark updated: %s", run_time)
+
+    except sqlite3.Error:
+        logger.exception("Failed to update pipeline watermark")
+        raise
+
 
 def validate_posts(posts,clean_posts):
 
@@ -239,16 +246,49 @@ def validate_posts(posts,clean_posts):
 
     return valid
 
+initialize_pipeline_metadata()
+
+last_run = get_last_successful_run()
+
+if last_run is None:
+    logger.info("First pipeline run detected")
+else:
+    logger.info(
+        "Incremental pipeline run. Last successful run: %s",
+        last_run
+    )
+
 posts = extract_posts()
 
 if posts is None:
+
     logger.warning("Extraction failed. Pipeline stopped.")
+
 else:
+
     clean_posts = transform_posts(posts)
-    if validate_posts(posts,clean_posts):
-        success = load_posts(clean_posts)
-        if success:
-            update_last_successful_run()
+
+    if validate_posts(posts, clean_posts):
+
+        connection = sqlite3.connect(DATABASE_PATH)
+
+        try:
+            load_posts(clean_posts, connection)
+
+            update_last_successful_run(connection)
+
+            connection.commit()
+            logger.info("Pipeline database transaction committed successfully")
+
+        except sqlite3.Error:
+
+            connection.rollback()
+            logger.exception("Pipeline database transaction failed")
+
+        finally:
+
+            connection.close()
+
     else:
+
         logger.error("Validation failed. Load stopped.")
-    
