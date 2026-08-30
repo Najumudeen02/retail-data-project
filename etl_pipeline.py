@@ -1,4 +1,3 @@
-from dotenv import load_dotenv
 from extraction import extract_posts, extract_posts_from_file
 from transformation import transform_posts,filter_incremental_posts
 from validation import validate_posts
