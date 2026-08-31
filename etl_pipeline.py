@@ -1,5 +1,5 @@
 from extraction import extract_posts, extract_posts_from_file
-from transformation import transform_posts,filter_incremental_posts
+from transformation import transform_posts, filter_incremental_posts
 from validation import validate_posts
 from database import (
     initialize_database,
@@ -23,7 +23,7 @@ def main():
             last_run
         )
 
-    #posts = extract_posts()
+    # Temporary: using local file as the source for incremental testing
     posts = extract_posts_from_file()
 
     if posts is None:

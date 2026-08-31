@@ -1,8 +1,9 @@
 
-import requests
 import json
 
-from config import API_URL,API_TIMEOUT
+import requests
+
+from config import API_URL, API_TIMEOUT
 from logger import logger
 
 def extract_posts_from_file():

@@ -1,6 +1,6 @@
 etl_pipeline.log
 retail_data.db
-*.env
+.env
 __pycache__/
 database_test.py
 source_posts.json
